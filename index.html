@@ -224,19 +224,68 @@
         linear-gradient(to bottom, rgba(8,8,8,.3) 0%, transparent 18%, transparent 80%, rgba(8,8,8,.65) 100%);
     }
 
-    #a-svg{
-      position:absolute;inset:0;width:100%;height:100%;
-      z-index:2;overflow:hidden;
+    /* ── Annotation pins (HTML overlay — crisp, tappable) ── */
+    #a-pins{position:absolute;inset:0;z-index:2;pointer-events:none}
+
+    .pin{
+      position:absolute;
+      transform:translate(-50%,-100%) scale(.3);
+      transform-origin:50% 100%;
+      pointer-events:auto;cursor:pointer;
+      background:none;border:none;padding:0;
+      opacity:0;
+      transition:opacity .35s, transform .45s cubic-bezier(.34,1.4,.5,1);
+      -webkit-tap-highlight-color:transparent;
+    }
+    .pin.on{opacity:1;transform:translate(-50%,-100%) scale(1)}
+
+    .pin-body{
+      position:relative;
+      width:24px;height:24px;border-radius:50%;
+      background:var(--gold);
+      display:flex;align-items:center;justify-content:center;
+      font-size:12px;font-weight:700;color:#080808;
+      box-shadow:0 2px 8px rgba(0,0,0,.45);
+      transition:background .2s, box-shadow .2s, transform .2s;
+    }
+    /* pointer tip */
+    .pin-body::after{
+      content:'';position:absolute;left:50%;bottom:-5px;
+      transform:translateX(-50%);
+      border-left:5px solid transparent;
+      border-right:5px solid transparent;
+      border-top:7px solid var(--gold);
+      transition:border-top-color .2s;
+    }
+    /* soft pulsing halo */
+    .pin-body::before{
+      content:'';position:absolute;inset:-6px;border-radius:50%;
+      border:1.5px solid var(--gold);opacity:.5;
+      animation:pin-pulse 2.6s ease-in-out infinite;
+    }
+    @keyframes pin-pulse{
+      0%,100%{transform:scale(1);opacity:.45}
+      50%{transform:scale(1.45);opacity:0}
     }
 
-    /* ── SVG annotation groups ── */
-    .a-group{opacity:0;transition:opacity .55s}
-    .a-group.on{opacity:1}
-
-    @keyframes halo-pulse{
-      0%,100%{r:5;opacity:.18}
-      50%{r:7;opacity:.06}
+    .pin.active{z-index:5}
+    .pin.active .pin-body{
+      background:#fff;transform:scale(1.18);
+      box-shadow:0 0 0 4px rgba(212,165,63,.35),0 2px 10px rgba(0,0,0,.5);
     }
+    .pin.active .pin-body::after{border-top-color:#fff}
+    .pin.active .pin-body::before{animation:none;opacity:0}
+
+    .img-hint{
+      position:absolute;bottom:12px;left:50%;transform:translateX(-50%);
+      z-index:3;font-size:10px;letter-spacing:2px;text-transform:uppercase;
+      color:rgba(255,255,255,.55);
+      background:rgba(8,8,8,.55);padding:5px 12px;border-radius:100px;
+      backdrop-filter:blur(4px);
+      opacity:0;transition:opacity .5s;pointer-events:none;
+    }
+    .img-hint.on{opacity:1}
+    .img-hint.gone{opacity:0}
 
     /* ── Feature cards ── */
     .feat-grid{
@@ -251,17 +300,31 @@
       background:var(--bg);
       padding:20px 22px;
       opacity:0;transform:translateY(6px);
-      transition:opacity .45s,transform .45s;
+      transition:opacity .45s,transform .45s,background .3s,box-shadow .3s;
+      scroll-margin-top:14px;
     }
     .feat-card.on{opacity:1;transform:none}
+    .feat-card.active{
+      background:#0f0d08;
+      box-shadow:inset 3px 0 0 var(--gold);
+    }
 
+    .fc-head{display:flex;align-items:center;gap:9px;margin-bottom:8px}
+    .fc-num{
+      flex-shrink:0;width:18px;height:18px;border-radius:50%;
+      background:rgba(212,165,63,.16);color:var(--gold);
+      font-size:10px;font-weight:700;
+      display:flex;align-items:center;justify-content:center;
+      transition:background .3s,color .3s;
+    }
+    .feat-card.active .fc-num{background:var(--gold);color:#080808}
     .fc-label{
       font-size:9px;letter-spacing:2.5px;text-transform:uppercase;
-      color:var(--gold);margin-bottom:8px;opacity:.7;
+      color:var(--gold);opacity:.75;
     }
     .fc-text{
-      font-size:14px;font-weight:300;color:var(--dim);
-      line-height:1.62;
+      font-size:14.5px;font-weight:300;color:rgba(246,246,246,.62);
+      line-height:1.64;
     }
 
     /* ── Reveal section ── */
@@ -518,7 +581,8 @@
 
   <div class="img-zone" id="img-zone">
     <img id="r-img" alt="Your face"/>
-    <svg id="a-svg" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+    <div id="a-pins"></div>
+    <p class="img-hint" id="img-hint">tap a pin</p>
   </div>
 
   <div class="feat-grid" id="feat-grid"></div>
@@ -563,16 +627,15 @@
 
 <script>
 // ─── Face annotation zones ────────────────────────────────────────────────
-// x/y: dot position as % of image (0–100 each axis), works with preserveAspectRatio=none
-// lx/ly: where the label line ends (near image edge)
-// la: SVG text-anchor ('start' = label reads right, 'end' = label reads left)
+// x/y: pin tip position as % of image (0–100 each axis).
+// The numbered pin sits above this point with its pointer tip resting on it.
 const ZONES = [
-  { key:'forehead', label:'Forehead', x:50, y:22, lx: 5, ly:10, la:'start' },
-  { key:'eyes',     label:'Eyes',     x:36, y:40, lx: 5, ly:37, la:'start' },
-  { key:'nose',     label:'Nose',     x:51, y:54, lx:95, ly:51, la:'end'   },
-  { key:'cheeks',   label:'Cheeks',   x:70, y:58, lx:95, ly:61, la:'end'   },
-  { key:'lips',     label:'Lips',     x:52, y:69, lx: 5, ly:69, la:'start' },
-  { key:'jawline',  label:'Jawline',  x:45, y:81, lx: 5, ly:81, la:'start' },
+  { key:'forehead', label:'Forehead', x:50, y:24 },
+  { key:'eyes',     label:'Eyes',     x:37, y:41 },
+  { key:'nose',     label:'Nose',     x:51, y:54 },
+  { key:'cheeks',   label:'Cheeks',   x:70, y:57 },
+  { key:'lips',     label:'Lips',     x:51, y:69 },
+  { key:'jawline',  label:'Jawline',  x:46, y:82 },
 ];
 
 
@@ -740,6 +803,66 @@ function onFile(e) {
   reader.readAsDataURL(f);
 }
 
+// ─── Auto exposure / contrast fix for bad lighting ───────────────────────
+// Runs once before sending. Samples luminance at low-res, then contrast-
+// stretches to a robust percentile range and lifts midtones if the shot is
+// dark. A single luminance-derived curve is applied to R/G/B so colour/skin
+// tone is preserved. Silent no-op on a well-exposed photo.
+function autoEnhance(canvas) {
+  try {
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width, h = canvas.height;
+    if (!w || !h) return;
+
+    // Downsample for fast analysis
+    const sw = Math.min(160, w), sh = Math.max(1, Math.round(sw * h / w));
+    const s = document.createElement('canvas');
+    s.width = sw; s.height = sh;
+    s.getContext('2d').drawImage(canvas, 0, 0, sw, sh);
+    const sd = s.getContext('2d').getImageData(0, 0, sw, sh).data;
+
+    const hist = new Array(256).fill(0);
+    let sum = 0; const n = sw * sh;
+    for (let i = 0; i < sd.length; i += 4) {
+      const lum = (sd[i] * 0.299 + sd[i + 1] * 0.587 + sd[i + 2] * 0.114) | 0;
+      hist[lum]++; sum += lum;
+    }
+    const mean = sum / n;
+
+    // Robust black/white points — clip 1.5% off each tail
+    const clip = n * 0.015;
+    let lo = 0, hi = 255, acc = 0;
+    for (let i = 0; i < 256; i++) { acc += hist[i]; if (acc > clip) { lo = i; break; } }
+    acc = 0;
+    for (let i = 255; i >= 0; i--) { acc += hist[i]; if (acc > clip) { hi = i; break; } }
+    if (hi - lo < 40) { lo = Math.max(0, lo - 20); hi = Math.min(255, hi + 20); }
+
+    // Skip if already bright and full-range
+    if (mean >= 128 && lo <= 8 && hi >= 247) return;
+
+    // Lift midtones harder the darker the photo is
+    let gamma = 1;
+    if (mean < 65)       gamma = 0.60;
+    else if (mean < 95)  gamma = 0.72;
+    else if (mean < 125) gamma = 0.85;
+
+    const range = Math.max(1, hi - lo);
+    const lut = new Uint8ClampedArray(256);
+    for (let i = 0; i < 256; i++) {
+      let v = (i - lo) / range;
+      v = v < 0 ? 0 : v > 1 ? 1 : v;
+      lut[i] = Math.pow(v, gamma) * 255;
+    }
+
+    const id = ctx.getImageData(0, 0, w, h);
+    const d = id.data;
+    for (let i = 0; i < d.length; i += 4) {
+      d[i] = lut[d[i]]; d[i + 1] = lut[d[i + 1]]; d[i + 2] = lut[d[i + 2]];
+    }
+    ctx.putImageData(id, 0, 0);
+  } catch { /* on any failure, send the original untouched */ }
+}
+
 function compress(canvas, quality = 0.88, max = 1000) {
   const off = document.createElement('canvas');
   let w = canvas.width, h = canvas.height;
@@ -785,6 +908,9 @@ async function analyze(canvas) {
     showToast('No internet connection');
     return;
   }
+
+  // Fix exposure/contrast for poorly-lit selfies before anything else.
+  autoEnhance(canvas);
 
   startLoad();
 
@@ -840,85 +966,45 @@ function setLoadMsgs(msgs) { _loadMsgs = msgs; _msgIdx = 0; }
 function renderResult(dataUrl, data) {
   const img = $('r-img');
   img.classList.remove('loaded');
-  img.src = dataUrl;
+  currentReadId = data.id || null;
+
+  // Show the screen FIRST so the image zone has a real width to measure.
+  buildCards(data);
+  $('rev-h').textContent   = data.headline;
+  $('rev-sum').textContent = data.summary;
+  show('res');
+
   img.onload = () => {
     const zone = $('img-zone');
+    const w = zone.offsetWidth || window.innerWidth;
     const ratio = img.naturalHeight / img.naturalWidth;
-    const ideal = zone.offsetWidth * ratio;
-    zone.style.height = Math.min(ideal, window.innerHeight * 0.70) + 'px';
+    zone.style.height = Math.min(w * ratio, window.innerHeight * 0.66) + 'px';
 
-    currentReadId = data.id || null;
-    buildSvg();
-    buildCards(data);
-    $('rev-h').textContent   = data.headline;
-    $('rev-sum').textContent = data.summary;
-
-    show('res');
+    buildPins();
 
     // Fade in the image first
     requestAnimationFrame(() => requestAnimationFrame(() => img.classList.add('loaded')));
 
-    animateDots(() => animateCards(() => animateReveal()));
+    animatePins(() => animateCards(() => animateReveal()));
   };
+  img.src = dataUrl;
 }
 
-// ─── SVG annotation: gold dot + halo + line + label ─────────────────────
-function buildSvg() {
-  const svg = $('a-svg'), ns = 'http://www.w3.org/2000/svg';
-  svg.innerHTML = '';
+// ─── Annotation pins (HTML overlay, numbered, tappable) ──────────────────
+function buildPins() {
+  const layer = $('a-pins');
+  layer.innerHTML = '';
 
-  ZONES.forEach(({ x, y, lx, ly, la, label }, i) => {
-    const g = document.createElementNS(ns, 'g');
-    g.classList.add('a-group');
-
-    // Pulsing halo behind dot
-    const halo = document.createElementNS(ns, 'circle');
-    halo.setAttribute('cx', x); halo.setAttribute('cy', y); halo.setAttribute('r', '5');
-    halo.setAttribute('fill', '#D4A53F'); halo.setAttribute('fill-opacity', '0.18');
-    halo.style.animation = `halo-pulse 2.8s ease-in-out ${i * 0.3}s infinite`;
-    g.appendChild(halo);
-
-    // Gold dot
-    const dot = document.createElementNS(ns, 'circle');
-    dot.setAttribute('cx', x); dot.setAttribute('cy', y); dot.setAttribute('r', '2.2');
-    dot.setAttribute('fill', '#D4A53F'); dot.setAttribute('fill-opacity', '0.92');
-    g.appendChild(dot);
-
-    // Line from dot to label
-    const line = document.createElementNS(ns, 'line');
-    line.setAttribute('x1', x); line.setAttribute('y1', y);
-    line.setAttribute('x2', lx); line.setAttribute('y2', ly);
-    line.setAttribute('stroke', 'rgba(212,165,63,0.5)');
-    line.setAttribute('stroke-width', '0.35');
-    g.appendChild(line);
-
-    // Pill background for label legibility
-    const FONT = 3.6;
-    const PW = label.length * 2.15 + 5;
-    const PH = 5.5;
-    const PX = la === 'start' ? lx + 0.5 : lx - PW - 0.5;
-    const PY = ly - PH / 2;
-    const pill = document.createElementNS(ns, 'rect');
-    pill.setAttribute('x', PX); pill.setAttribute('y', PY);
-    pill.setAttribute('width', PW); pill.setAttribute('height', PH);
-    pill.setAttribute('rx', '1.4');
-    pill.setAttribute('fill', 'rgba(8,8,8,0.72)');
-    g.appendChild(pill);
-
-    // Label text
-    const txt = document.createElementNS(ns, 'text');
-    txt.setAttribute('x', la === 'start' ? lx + 3 : lx - 3);
-    txt.setAttribute('y', ly + 1.6);
-    txt.setAttribute('text-anchor', la);
-    txt.setAttribute('font-size', FONT);
-    txt.setAttribute('fill', '#D4A53F');
-    txt.setAttribute('font-family', 'Space Grotesk, sans-serif');
-    txt.setAttribute('font-weight', '600');
-    txt.setAttribute('letter-spacing', '0.6');
-    txt.textContent = label.toUpperCase();
-    g.appendChild(txt);
-
-    svg.appendChild(g);
+  ZONES.forEach(({ x, y, label }, i) => {
+    const pin = document.createElement('button');
+    pin.className = 'pin';
+    pin.dataset.i = i;
+    pin.style.left = x + '%';
+    pin.style.top  = y + '%';
+    pin.setAttribute('aria-label', label);
+    pin.innerHTML = `<span class="pin-body">${i + 1}</span>`;
+    pin.onclick = () => focusFeature(i, true);
+    layer.appendChild(pin);
   });
 }
 
@@ -929,21 +1015,45 @@ function buildCards(data) {
   ZONES.forEach(({ key, label }, i) => {
     const card = document.createElement('div');
     card.className = 'feat-card'; card.dataset.i = i;
-    card.innerHTML = `<p class="fc-label">${label}</p><p class="fc-text">${data[key] || ''}</p>`;
+    card.id = `fc-${i}`;
+    card.innerHTML =
+      `<div class="fc-head"><span class="fc-num">${i + 1}</span><span class="fc-label">${label}</span></div>` +
+      `<p class="fc-text">${data[key] || ''}</p>`;
+    card.onclick = () => focusFeature(i, false);
     grid.appendChild(card);
   });
 }
 
+// ─── Link a pin to its detail card ────────────────────────────────────────
+let _hintDismissed = false;
+function focusFeature(i, scroll) {
+  // Hide the "tap a pin" hint after first interaction
+  if (!_hintDismissed) { $('img-hint')?.classList.add('gone'); _hintDismissed = true; }
+
+  document.querySelectorAll('.pin').forEach(p =>
+    p.classList.toggle('active', +p.dataset.i === i));
+  document.querySelectorAll('.feat-card').forEach(c =>
+    c.classList.toggle('active', +c.dataset.i === i));
+
+  if (scroll) {
+    const card = $(`fc-${i}`);
+    card?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  if (navigator.vibrate) navigator.vibrate(8);
+}
+
 // ─── Staggered animation ──────────────────────────────────────────────────
-function animateDots(done) {
-  const groups = $('a-svg').querySelectorAll('.a-group');
+function animatePins(done) {
+  const pins = $('a-pins').querySelectorAll('.pin');
   let last = 0;
-  groups.forEach((g, i) => {
-    const d = 200 + i * 320;
+  pins.forEach((p, i) => {
+    const d = 200 + i * 240;
     if (d > last) last = d;
-    setTimeout(() => g.classList.add('on'), d);
+    setTimeout(() => p.classList.add('on'), d);
   });
-  setTimeout(done, last + 360);
+  // Show the "tap a pin" hint once all pins have dropped in
+  setTimeout(() => { if (!_hintDismissed) $('img-hint')?.classList.add('on'); }, last + 400);
+  setTimeout(done, last + 300);
 }
 
 function animateCards(done) {
@@ -1008,11 +1118,12 @@ function reset() {
   currentReadId = null;
   const img = $('r-img');
   img.src = ''; img.classList.remove('loaded');
-  $('a-svg').innerHTML = '';
+  $('a-pins').innerHTML = '';
   $('feat-grid').innerHTML = '';
   $('rev-h').textContent = ''; $('rev-sum').textContent = '';
   $('img-zone').style.height = '';
-  $('a-svg').querySelectorAll('.a-group').forEach(g => g.classList.remove('on'));
+  _hintDismissed = false;
+  $('img-hint')?.classList.remove('on', 'gone');
   ['rev-kicker','rev-h','rev-sum','rev-rule','conv','btn-cta','share-row','cta-note']
     .forEach(id => $(id)?.classList.remove('on'));
   show('land');
