@@ -1,0 +1,1018 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+  <meta name="theme-color" content="#080808"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta property="og:title" content="Face Read — Stori AI"/>
+  <meta property="og:description" content="30 seconds. Real observations. No filter."/>
+  <title>Face Read — Stori AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,600;1,700&display=swap" rel="stylesheet"/>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+    :root{
+      --bg:#080808;
+      --surface:#111;
+      --text:#F6F6F6;
+      --dim:rgba(246,246,246,0.42);
+      --faint:rgba(246,246,246,0.15);
+      --gold:#D4A53F;
+      --font:'Space Grotesk',system-ui,sans-serif;
+      --font-serif:'Playfair Display',Georgia,serif;
+    }
+
+    html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);overflow:hidden}
+
+    /* film grain */
+    body::after{
+      content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='256'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.92' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='256' height='256' filter='url(%23f)' opacity='0.05'/%3E%3C/svg%3E");
+      opacity:1;
+    }
+
+    .screen{display:none;position:fixed;inset:0;flex-direction:column;align-items:center;justify-content:center}
+    .screen.active{display:flex}
+
+    /* ─────────────────────────────────────────────
+       LANDING
+    ───────────────────────────────────────────── */
+    #s-land{padding:48px 32px 52px;text-align:center;gap:0}
+
+    .l-tag{
+      font-size:10px;letter-spacing:4px;text-transform:uppercase;
+      color:var(--faint);margin-bottom:52px;
+    }
+
+    .l-head{
+      font-family:var(--font-serif);
+      font-size:clamp(38px,10.5vw,58px);
+      font-style:italic;font-weight:700;
+      line-height:1.06;letter-spacing:-0.4px;
+      margin-bottom:20px;
+    }
+
+    .l-sub{
+      font-size:14px;color:var(--dim);
+      line-height:1.7;max-width:255px;
+      margin:0 auto 52px;font-weight:300;
+    }
+
+    .btn-go{
+      display:inline-flex;align-items:center;gap:12px;
+      background:var(--text);color:var(--bg);
+      font-family:var(--font);font-size:14px;font-weight:700;
+      letter-spacing:0.2px;border:none;border-radius:100px;
+      padding:17px 42px;cursor:pointer;
+      transition:opacity .18s,transform .14s;
+      -webkit-tap-highlight-color:transparent;
+    }
+    .btn-go:active{opacity:.8;transform:scale(.97)}
+
+    .btn-upload-alt{
+      display:block;margin:18px auto 0;
+      background:none;border:none;cursor:pointer;
+      font-family:var(--font);font-size:12px;color:var(--faint);
+      -webkit-tap-highlight-color:transparent;
+    }
+    .btn-upload-alt:active{opacity:.5}
+
+    .l-foot{
+      font-size:10px;color:var(--faint);letter-spacing:1.5px;
+      margin-top:auto;padding-top:36px;
+    }
+
+    /* ─────────────────────────────────────────────
+       CAMERA
+    ───────────────────────────────────────────── */
+    #s-cam{background:#000;justify-content:flex-start}
+
+    #video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+
+    /* Face oval guide */
+    .face-guide{
+      position:absolute;top:50%;left:50%;
+      transform:translate(-50%,-56%);
+      width:64%;padding-top:86%;
+      border:1.5px solid rgba(255,255,255,.28);
+      border-radius:50%;
+      pointer-events:none;z-index:8;
+      box-shadow:0 0 0 2000px rgba(0,0,0,.22);
+      animation:guide-pulse 3.2s ease-in-out infinite;
+    }
+    @keyframes guide-pulse{
+      0%,100%{border-color:rgba(255,255,255,.22)}
+      50%{border-color:rgba(255,255,255,.48)}
+    }
+
+    .cam-top{
+      position:absolute;top:0;left:0;right:0;z-index:10;
+      padding:20px 22px;
+      background:linear-gradient(to bottom,rgba(0,0,0,.55) 0%,transparent 100%);
+    }
+    .back{
+      background:none;border:none;color:rgba(255,255,255,.6);
+      font-family:var(--font);font-size:13px;cursor:pointer;
+      display:flex;align-items:center;gap:6px;
+      -webkit-tap-highlight-color:transparent;
+    }
+    .back svg{opacity:.7}
+
+    .cam-bot{
+      position:absolute;inset:auto 0 0;z-index:10;
+      display:flex;flex-direction:column;align-items:center;
+      padding-bottom:52px;
+      background:linear-gradient(to top,rgba(0,0,0,.7) 0%,transparent 50%);
+    }
+    .cam-hint{font-size:13px;color:rgba(255,255,255,.5);margin-bottom:28px}
+
+    .shutter{
+      width:74px;height:74px;border-radius:50%;
+      background:transparent;border:2.5px solid rgba(255,255,255,.8);
+      cursor:pointer;position:relative;
+      -webkit-tap-highlight-color:transparent;
+      transition:transform .1s;
+    }
+    .shutter::after{
+      content:'';position:absolute;inset:7px;
+      border-radius:50%;background:#fff;
+      transition:transform .1s,opacity .1s;
+    }
+    .shutter:active{transform:scale(.88)}
+    .shutter:active::after{opacity:.7}
+
+    .cam-alt{
+      margin-top:20px;background:none;border:none;cursor:pointer;
+      font-family:var(--font);font-size:11px;color:rgba(255,255,255,.28);
+      -webkit-tap-highlight-color:transparent;
+    }
+
+    /* ─────────────────────────────────────────────
+       LOADING
+    ───────────────────────────────────────────── */
+    #s-load{gap:26px;overflow:hidden}
+
+    /* Scan line that sweeps the full screen */
+    .scan-line{
+      position:absolute;left:0;right:0;height:1px;
+      background:linear-gradient(to right,transparent 0%,rgba(212,165,63,.5) 30%,rgba(212,165,63,.7) 50%,rgba(212,165,63,.5) 70%,transparent 100%);
+      pointer-events:none;
+      animation:scan 2.6s cubic-bezier(.4,0,.6,1) infinite;
+    }
+    @keyframes scan{
+      0%{top:8%;opacity:0}
+      8%{opacity:1}
+      88%{opacity:1}
+      100%{top:92%;opacity:0}
+    }
+
+    .ring{
+      width:42px;height:42px;border-radius:50%;
+      border:1.5px solid rgba(255,255,255,.09);
+      border-top-color:rgba(255,255,255,.55);
+      animation:spin 1.1s linear infinite;
+    }
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    .load-tag{
+      font-size:10px;letter-spacing:4px;text-transform:uppercase;
+      color:var(--faint);
+    }
+    .load-msg{
+      font-size:14px;color:var(--dim);font-weight:300;
+      min-height:21px;transition:opacity .3s;
+    }
+
+    /* ─────────────────────────────────────────────
+       RESULT
+    ───────────────────────────────────────────── */
+    #s-res{
+      align-items:stretch;justify-content:flex-start;
+      overflow-y:auto;-webkit-overflow-scrolling:touch;
+      background:var(--bg);
+    }
+
+    .res-top{
+      flex-shrink:0;display:flex;align-items:center;
+      padding:18px 20px 12px;
+    }
+    .res-brand{font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--faint);margin-left:auto}
+
+    /* ── Image + annotation layer ── */
+    .img-zone{
+      flex-shrink:0;position:relative;width:100%;
+      /* height set by JS */
+    }
+    #r-img{
+      display:block;width:100%;height:100%;object-fit:cover;
+      opacity:0;transition:opacity .55s ease;
+    }
+    #r-img.loaded{opacity:1}
+
+    /* vignette + side gradients */
+    .img-zone::before{
+      content:'';position:absolute;inset:0;z-index:1;pointer-events:none;
+      background:
+        linear-gradient(to right, rgba(8,8,8,.7) 0%, transparent 28%, transparent 72%, rgba(8,8,8,.7) 100%),
+        linear-gradient(to bottom, rgba(8,8,8,.3) 0%, transparent 18%, transparent 80%, rgba(8,8,8,.65) 100%);
+    }
+
+    #a-svg{
+      position:absolute;inset:0;width:100%;height:100%;
+      z-index:2;overflow:hidden;
+    }
+
+    /* ── SVG annotation groups ── */
+    .a-group{opacity:0;transition:opacity .55s}
+    .a-group.on{opacity:1}
+
+    @keyframes halo-pulse{
+      0%,100%{r:5;opacity:.18}
+      50%{r:7;opacity:.06}
+    }
+
+    /* ── Feature cards ── */
+    .feat-grid{
+      flex-shrink:0;
+      display:flex;flex-direction:column;
+      gap:1px;
+      background:rgba(255,255,255,.06);
+      border-top:1px solid rgba(255,255,255,.06);
+    }
+
+    .feat-card{
+      background:var(--bg);
+      padding:20px 22px;
+      opacity:0;transform:translateY(6px);
+      transition:opacity .45s,transform .45s;
+    }
+    .feat-card.on{opacity:1;transform:none}
+
+    .fc-label{
+      font-size:9px;letter-spacing:2.5px;text-transform:uppercase;
+      color:var(--gold);margin-bottom:8px;opacity:.7;
+    }
+    .fc-text{
+      font-size:14px;font-weight:300;color:var(--dim);
+      line-height:1.62;
+    }
+
+    /* ── Reveal section ── */
+    .reveal{
+      flex-shrink:0;
+      padding:44px 24px 32px;
+    }
+
+    .rev-kicker{
+      font-size:10px;letter-spacing:3.5px;text-transform:uppercase;
+      color:var(--gold);margin-bottom:16px;
+      opacity:0;transition:opacity .5s;
+    }
+    .rev-kicker.on{opacity:1}
+
+    .rev-h{
+      font-family:var(--font-serif);
+      font-size:clamp(29px,7.5vw,42px);
+      font-style:italic;font-weight:700;
+      line-height:1.1;margin-bottom:16px;
+      opacity:0;transform:translateY(10px);
+      transition:opacity .65s,transform .65s;
+    }
+    .rev-h.on{opacity:1;transform:none}
+
+    .rev-sum{
+      font-size:14px;color:var(--dim);line-height:1.75;
+      margin-bottom:32px;font-weight:300;
+      opacity:0;transition:opacity .55s .08s;
+    }
+    .rev-sum.on{opacity:1}
+
+    .rev-rule{
+      width:36px;height:1px;background:rgba(255,255,255,.1);
+      margin-bottom:28px;
+      opacity:0;transition:opacity .4s .12s;
+    }
+    .rev-rule.on{opacity:1}
+
+    /* Conversion block */
+    .conv{opacity:0;transition:opacity .55s .18s}
+    .conv.on{opacity:1}
+
+    .conv-head{font-size:16px;font-weight:600;line-height:1.45;margin-bottom:10px}
+    .conv-body{
+      font-size:14px;color:var(--dim);line-height:1.72;
+      margin-bottom:28px;font-weight:300;
+    }
+    .conv-body strong{color:var(--text);font-weight:500}
+
+    .btn-cta{
+      display:flex;align-items:center;justify-content:space-between;
+      width:100%;padding:18px 20px;
+      background:var(--gold);color:#080808;
+      font-family:var(--font);font-size:14px;font-weight:700;
+      border:none;border-radius:14px;cursor:pointer;
+      text-decoration:none;
+      opacity:0;transform:translateY(8px);
+      transition:opacity .55s .28s,transform .55s .28s,filter .18s;
+      -webkit-tap-highlight-color:transparent;
+    }
+    .btn-cta.on{opacity:1;transform:none}
+    .btn-cta:active{filter:brightness(.86)}
+
+    /* Share nudge */
+    .share-row{
+      display:flex;align-items:center;justify-content:center;gap:12px;
+      margin-top:20px;
+      opacity:0;transition:opacity .4s .42s;
+    }
+    .share-row.on{opacity:1}
+
+    .btn-share{
+      display:inline-flex;align-items:center;gap:8px;
+      background:none;border:1px solid rgba(255,255,255,.14);
+      border-radius:100px;padding:10px 20px;
+      font-family:var(--font);font-size:13px;color:var(--dim);
+      cursor:pointer;-webkit-tap-highlight-color:transparent;
+      transition:border-color .18s,color .18s;
+    }
+    .btn-share:active{border-color:rgba(255,255,255,.35);color:var(--text)}
+
+    .cta-note{
+      font-size:11px;color:var(--faint);
+      text-align:center;margin-top:12px;
+      opacity:0;transition:opacity .4s .5s;
+      padding-bottom:40px;
+    }
+    .cta-note.on{opacity:1}
+
+    /* Toast for clipboard fallback */
+    .toast{
+      position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(14px);
+      background:rgba(30,30,30,.97);border:1px solid rgba(255,255,255,.1);
+      border-radius:100px;padding:11px 22px;
+      font-size:13px;color:var(--text);
+      opacity:0;pointer-events:none;
+      transition:opacity .25s,transform .25s;
+      z-index:10000;white-space:nowrap;
+    }
+    .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+    /* ─────────────────────────────────────────────
+       HISTORY
+    ───────────────────────────────────────────── */
+    #s-hist{
+      align-items:stretch;justify-content:flex-start;
+      overflow-y:auto;-webkit-overflow-scrolling:touch;
+      background:var(--bg);
+    }
+
+    .hist-top{
+      flex-shrink:0;display:flex;align-items:center;
+      padding:18px 20px 14px;
+      border-bottom:1px solid rgba(255,255,255,.06);
+      position:sticky;top:0;background:var(--bg);z-index:10;
+    }
+    .hist-title{
+      font-size:11px;letter-spacing:3px;text-transform:uppercase;
+      color:var(--faint);margin:0 auto;
+    }
+    .btn-clear{
+      background:none;border:none;cursor:pointer;
+      font-family:var(--font);font-size:12px;
+      color:rgba(255,100,100,.55);
+      -webkit-tap-highlight-color:transparent;
+      transition:color .18s;padding:4px 0;
+    }
+    .btn-clear.arm{color:rgba(255,80,80,.9)}
+    .btn-clear:active{opacity:.6}
+
+    .hist-empty{
+      flex:1;display:flex;flex-direction:column;
+      align-items:center;justify-content:center;gap:12px;
+      color:var(--faint);font-size:13px;font-weight:300;
+    }
+
+    .hist-list{
+      flex:1;display:flex;flex-direction:column;
+    }
+
+    .hist-item{
+      display:flex;align-items:center;gap:14px;
+      padding:14px 20px;
+      background:none;border:none;border-bottom:1px solid rgba(255,255,255,.05);
+      cursor:pointer;text-align:left;width:100%;
+      -webkit-tap-highlight-color:transparent;
+      transition:background .15s;
+    }
+    .hist-item:active{background:rgba(255,255,255,.04)}
+
+    .hist-thumb{
+      flex-shrink:0;width:52px;height:52px;border-radius:8px;
+      overflow:hidden;background:rgba(255,255,255,.06);
+    }
+    .hist-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+
+    .hist-info{flex:1;min-width:0}
+    .hist-headline{
+      font-size:13px;font-style:italic;font-family:var(--font-serif);
+      color:var(--text);line-height:1.3;
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+      margin-bottom:4px;
+    }
+    .hist-date{font-size:11px;color:var(--faint);font-weight:300}
+
+    .hist-arrow{color:rgba(255,255,255,.2);flex-shrink:0}
+
+    /* Landing history entry point */
+    .btn-history{
+      display:none;
+      margin-top:22px;
+      background:none;border:1px solid rgba(255,255,255,.1);
+      border-radius:100px;padding:10px 24px;
+      font-family:var(--font);font-size:12px;color:var(--dim);
+      cursor:pointer;-webkit-tap-highlight-color:transparent;
+      align-items:center;gap:8px;
+      transition:border-color .18s;
+    }
+    .btn-history:active{border-color:rgba(255,255,255,.28)}
+
+    /* ── hidden utils ── */
+    #canvas-h{display:none}
+    #file-in{display:none}
+  </style>
+</head>
+<body>
+
+<!-- ══ LANDING ══ -->
+<div id="s-land" class="screen active">
+  <p class="l-tag">Stori AI</p>
+  <h1 class="l-head">Let AI<br/>read your<br/>face.</h1>
+  <p class="l-sub">30 seconds. Real observations.<br/>No filter.</p>
+  <button class="btn-go" onclick="goCamera()">Take my photo →</button>
+  <button class="btn-upload-alt" onclick="triggerUpload()">or upload a photo</button>
+  <button class="btn-history" id="btn-history" onclick="showHistory()">
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+      <circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.2"/>
+      <path d="M6 3.5v2.8l1.8 1.8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+    </svg>
+    past scans
+  </button>
+  <p class="l-foot">BY STORI AI</p>
+</div>
+
+<!-- ══ HISTORY ══ -->
+<div id="s-hist" class="screen">
+  <div class="hist-top">
+    <button class="back" onclick="show('land')">
+      <svg width="7" height="12" viewBox="0 0 7 12" fill="none"><path d="M6 1L1 6L6 11" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      back
+    </button>
+    <span class="hist-title">Past Scans</span>
+    <button class="btn-clear" id="btn-clear" onclick="confirmClear()">Clear</button>
+  </div>
+  <div class="hist-list" id="hist-list"></div>
+</div>
+
+<!-- ══ CAMERA ══ -->
+<div id="s-cam" class="screen">
+  <div class="cam-top">
+    <button class="back" onclick="navBack()">
+      <svg width="7" height="12" viewBox="0 0 7 12" fill="none"><path d="M6 1L1 6L6 11" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      back
+    </button>
+  </div>
+  <video id="video" autoplay playsinline muted></video>
+  <div class="face-guide"></div>
+  <div class="cam-bot">
+    <p class="cam-hint">Align your face with the oval</p>
+    <button class="shutter" onclick="capture()"></button>
+    <button class="cam-alt" onclick="triggerUpload()">upload instead</button>
+  </div>
+</div>
+
+<!-- ══ LOADING ══ -->
+<div id="s-load" class="screen">
+  <div class="scan-line"></div>
+  <p class="load-tag">Stori AI</p>
+  <div class="ring"></div>
+  <p class="load-msg" id="load-msg">reading your face...</p>
+</div>
+
+<!-- ══ RESULT ══ -->
+<div id="s-res" class="screen">
+
+  <div class="res-top">
+    <button class="back" onclick="reset()">
+      <svg width="7" height="12" viewBox="0 0 7 12" fill="none"><path d="M6 1L1 6L6 11" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      retake
+    </button>
+    <span class="res-brand">Stori AI</span>
+  </div>
+
+  <div class="img-zone" id="img-zone">
+    <img id="r-img" alt="Your face"/>
+    <svg id="a-svg" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+  </div>
+
+  <div class="feat-grid" id="feat-grid"></div>
+
+  <div class="reveal">
+    <p class="rev-kicker" id="rev-kicker">STORI AI READS</p>
+    <h2 class="rev-h"    id="rev-h"></h2>
+    <p class="rev-sum"   id="rev-sum"></p>
+    <div class="rev-rule" id="rev-rule"></div>
+
+    <div class="conv" id="conv">
+      <p class="conv-head">Your face communicates naturally.<br/>Your profile has 8 minutes to do the same.</p>
+      <p class="conv-body">
+        Admissions committees and recruiters form a first impression fast —
+        from your profile photo, your headline, your story.
+        <strong>Most profiles waste that window.</strong>
+        Stori AI makes sure yours doesn't.
+      </p>
+      <button class="btn-cta" id="btn-cta" onclick="ctaClick()">
+        Make my profile this readable
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="#080808" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+
+      <div class="share-row" id="share-row">
+        <button class="btn-share" onclick="shareExp()">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M10 1l3 3-3 3M13 4H5a4 4 0 000 8h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          share with a friend
+        </button>
+      </div>
+
+      <p class="cta-note" id="cta-note">stori.co.in · free waitlist</p>
+    </div>
+  </div>
+
+</div>
+
+<canvas id="canvas-h"></canvas>
+<input type="file" id="file-in" accept="image/*" onchange="onFile(event)"/>
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── Face annotation zones ────────────────────────────────────────────────
+// x/y: dot position as % of image (0–100 each axis), works with preserveAspectRatio=none
+// lx/ly: where the label line ends (near image edge)
+// la: SVG text-anchor ('start' = label reads right, 'end' = label reads left)
+const ZONES = [
+  { key:'forehead', label:'Forehead', x:50, y:22, lx: 5, ly:10, la:'start' },
+  { key:'eyes',     label:'Eyes',     x:36, y:40, lx: 5, ly:37, la:'start' },
+  { key:'nose',     label:'Nose',     x:51, y:54, lx:95, ly:51, la:'end'   },
+  { key:'cheeks',   label:'Cheeks',   x:70, y:58, lx:95, ly:61, la:'end'   },
+  { key:'lips',     label:'Lips',     x:52, y:69, lx: 5, ly:69, la:'start' },
+  { key:'jawline',  label:'Jawline',  x:45, y:81, lx: 5, ly:81, la:'start' },
+];
+
+
+const API_BASE = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
+  ? 'https://www.storiapidomain.online'
+  : '';
+
+let stream = null, loadTimer = null, currentReadId = null;
+
+// ─── History storage (localStorage) ──────────────────────────────────────
+const SCANS_KEY = 'face_scans';
+
+function loadScans() {
+  try { return JSON.parse(localStorage.getItem(SCANS_KEY) || '[]'); }
+  catch { return []; }
+}
+
+function saveScan(id, imageUrl, data) {
+  const scans = loadScans();
+  // Don't duplicate if viewing an existing scan
+  if (scans.find(s => s.id === id)) return;
+  scans.unshift({ id, headline: data.headline, created_at: new Date().toISOString() });
+  localStorage.setItem(SCANS_KEY, JSON.stringify(scans.slice(0, 30)));
+  localStorage.setItem(`face_img_${id}`, imageUrl);
+  localStorage.setItem(`face_res_${id}`, JSON.stringify(data));
+  updateHistoryButton();
+}
+
+function updateHistoryButton() {
+  const btn = $('btn-history');
+  const scans = loadScans();
+  const count = scans.length;
+  btn.style.display = count > 0 ? 'inline-flex' : 'none';
+  btn.querySelector('span') && (btn.querySelector('span').textContent = `past scans (${count})`);
+}
+
+let clearArmed = false, clearTimer = null;
+function confirmClear() {
+  const btn = $('btn-clear');
+  if (!clearArmed) {
+    clearArmed = true;
+    btn.classList.add('arm');
+    btn.textContent = 'tap again to clear';
+    clearTimer = setTimeout(() => {
+      clearArmed = false;
+      btn.classList.remove('arm');
+      btn.textContent = 'Clear';
+    }, 3000);
+  } else {
+    clearTimeout(clearTimer);
+    clearArmed = false;
+    clearHistory();
+  }
+}
+
+function clearHistory() {
+  loadScans().forEach(s => {
+    localStorage.removeItem(`face_img_${s.id}`);
+    localStorage.removeItem(`face_res_${s.id}`);
+  });
+  localStorage.removeItem(SCANS_KEY);
+  updateHistoryButton();
+  show('land');
+}
+
+function showHistory() {
+  const scans = loadScans();
+  const list = $('hist-list');
+  list.innerHTML = '';
+
+  // Reset clear button state
+  const cb = $('btn-clear');
+  cb.textContent = 'Clear'; cb.classList.remove('arm');
+  clearArmed = false; clearTimeout(clearTimer);
+
+  if (scans.length === 0) {
+    list.innerHTML = '<div class="hist-empty"><p>No scans yet.</p></div>';
+  } else {
+    scans.forEach(scan => {
+      const imgSrc = localStorage.getItem(`face_img_${scan.id}`) || '';
+      const d = new Date(scan.created_at);
+      const dateStr = d.toLocaleDateString('en-IN', { month:'short', day:'numeric' })
+        + ' · ' + d.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' });
+
+      const item = document.createElement('button');
+      item.className = 'hist-item';
+      item.onclick = () => viewScan(scan.id);
+      item.innerHTML = `
+        <div class="hist-thumb">${imgSrc ? `<img src="${imgSrc}" alt=""/>` : ''}</div>
+        <div class="hist-info">
+          <p class="hist-headline">"${scan.headline}"</p>
+          <p class="hist-date">${dateStr}</p>
+        </div>
+        <svg class="hist-arrow" width="7" height="12" viewBox="0 0 7 12" fill="none">
+          <path d="M1 1l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>`;
+      list.appendChild(item);
+    });
+  }
+  show('hist');
+}
+
+function viewScan(id) {
+  const imgUrl = localStorage.getItem(`face_img_${id}`);
+  const raw    = localStorage.getItem(`face_res_${id}`);
+  if (!imgUrl || !raw) return;
+  try { renderResult(imgUrl, JSON.parse(raw)); } catch {}
+}
+
+const $ = id => document.getElementById(id);
+
+function show(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  $('s-' + id).classList.add('active');
+  if (id === 'res') $('s-res').scrollTop = 0;
+}
+
+// ─── Camera ───────────────────────────────────────────────────────────────
+async function goCamera() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video:{ facingMode:'user', width:{ ideal:1280 }, height:{ ideal:960 } },
+      audio:false,
+    });
+    $('video').srcObject = stream;
+    show('cam');
+  } catch {
+    triggerUpload();
+  }
+}
+
+function stopCam() {
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+}
+
+function navBack() { stopCam(); show('land'); }
+function triggerUpload() { $('file-in').click(); }
+
+function capture() {
+  if (navigator.vibrate) navigator.vibrate(60);
+  const v = $('video'), c = $('canvas-h');
+  c.width = v.videoWidth; c.height = v.videoHeight;
+  const ctx = c.getContext('2d');
+  ctx.translate(c.width, 0); ctx.scale(-1, 1);
+  ctx.drawImage(v, 0, 0);
+  stopCam();
+  analyze(c); // pass canvas so retries can recompress
+}
+
+function onFile(e) {
+  const f = e.target.files[0]; if (!f) return;
+  e.target.value = '';
+  stopCam();
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = new Image();
+    img.onload = () => {
+      const c = $('canvas-h');
+      c.width = img.naturalWidth; c.height = img.naturalHeight;
+      c.getContext('2d').drawImage(img, 0, 0);
+      analyze(c);
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(f);
+}
+
+function compress(canvas, quality = 0.88, max = 1000) {
+  const off = document.createElement('canvas');
+  let w = canvas.width, h = canvas.height;
+  if (w > max || h > max) { const r = Math.min(max/w, max/h); w = Math.round(w*r); h = Math.round(h*r); }
+  off.width = w; off.height = h;
+  off.getContext('2d').drawImage(canvas, 0, 0, w, h);
+  return off.toDataURL('image/jpeg', quality);
+}
+
+// Progressive compression levels — tried in order on retry
+const COMPRESS_LEVELS = [
+  { quality: 0.88, max: 1000 }, // ~200-300KB
+  { quality: 0.76, max: 800  }, // ~100-150KB — retry 1
+  { quality: 0.62, max: 640  }, // ~50-80KB  — retry 2
+];
+
+// ─── Loading ──────────────────────────────────────────────────────────────
+function startLoad() {
+  show('load');
+  _loadMsgs = RETRY_MSGS[0]; _msgIdx = 0;
+  const el = $('load-msg');
+  el.textContent = _loadMsgs[0]; el.style.opacity = '1';
+  loadTimer = setInterval(() => {
+    el.style.opacity = '0';
+    setTimeout(() => {
+      _msgIdx = (_msgIdx + 1) % _loadMsgs.length;
+      el.textContent = _loadMsgs[_msgIdx];
+      el.style.opacity = '1';
+    }, 340);
+  }, 2600);
+}
+function stopLoad() { clearInterval(loadTimer); loadTimer = null; }
+
+// ─── API — retry loop with progressive compression ────────────────────────
+const RETRY_MSGS = [
+  ['reading your face...', 'noticing what others miss...', 'looking closely...'],
+  ['slow connection — still going...', 'compressing and retrying...', 'almost there...'],
+  ['one more try...', 'hang tight...', 'nearly done...'],
+];
+
+async function analyze(canvas) {
+  if (!navigator.onLine) {
+    showToast('No internet connection');
+    return;
+  }
+
+  startLoad();
+
+  for (let attempt = 0; attempt < COMPRESS_LEVELS.length; attempt++) {
+    setLoadMsgs(RETRY_MSGS[attempt]);
+
+    const { quality, max } = COMPRESS_LEVELS[attempt];
+    const dataUrl = compress(canvas, quality, max);
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30000); // 30s per attempt
+
+    try {
+      const res = await fetch(`${API_BASE}/api/face/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: dataUrl }),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+
+      if (!res.ok) throw new Error('status_' + res.status);
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      stopLoad();
+      if (data.id) saveScan(data.id, dataUrl, data);
+      renderResult(dataUrl, data);
+      return; // success — exit loop
+
+    } catch (err) {
+      clearTimeout(timer);
+      const isLast = attempt === COMPRESS_LEVELS.length - 1;
+      if (isLast) {
+        stopLoad();
+        const msg = navigator.onLine
+          ? 'Couldn\'t reach the server. Check connection and try again.'
+          : 'No internet connection.';
+        showToast(msg);
+        show('land');
+        return;
+      }
+      // Brief pause before next attempt
+      await new Promise(r => setTimeout(r, 1000));
+    }
+  }
+}
+
+let _loadMsgs = RETRY_MSGS[0], _msgIdx = 0;
+function setLoadMsgs(msgs) { _loadMsgs = msgs; _msgIdx = 0; }
+
+// ─── Render result ────────────────────────────────────────────────────────
+function renderResult(dataUrl, data) {
+  const img = $('r-img');
+  img.classList.remove('loaded');
+  img.src = dataUrl;
+  img.onload = () => {
+    const zone = $('img-zone');
+    const ratio = img.naturalHeight / img.naturalWidth;
+    const ideal = zone.offsetWidth * ratio;
+    zone.style.height = Math.min(ideal, window.innerHeight * 0.70) + 'px';
+
+    currentReadId = data.id || null;
+    buildSvg();
+    buildCards(data);
+    $('rev-h').textContent   = data.headline;
+    $('rev-sum').textContent = data.summary;
+
+    show('res');
+
+    // Fade in the image first
+    requestAnimationFrame(() => requestAnimationFrame(() => img.classList.add('loaded')));
+
+    animateDots(() => animateCards(() => animateReveal()));
+  };
+}
+
+// ─── SVG annotation: gold dot + halo + line + label ─────────────────────
+function buildSvg() {
+  const svg = $('a-svg'), ns = 'http://www.w3.org/2000/svg';
+  svg.innerHTML = '';
+
+  ZONES.forEach(({ x, y, lx, ly, la, label }, i) => {
+    const g = document.createElementNS(ns, 'g');
+    g.classList.add('a-group');
+
+    // Pulsing halo behind dot
+    const halo = document.createElementNS(ns, 'circle');
+    halo.setAttribute('cx', x); halo.setAttribute('cy', y); halo.setAttribute('r', '5');
+    halo.setAttribute('fill', '#D4A53F'); halo.setAttribute('fill-opacity', '0.18');
+    halo.style.animation = `halo-pulse 2.8s ease-in-out ${i * 0.3}s infinite`;
+    g.appendChild(halo);
+
+    // Gold dot
+    const dot = document.createElementNS(ns, 'circle');
+    dot.setAttribute('cx', x); dot.setAttribute('cy', y); dot.setAttribute('r', '2.2');
+    dot.setAttribute('fill', '#D4A53F'); dot.setAttribute('fill-opacity', '0.92');
+    g.appendChild(dot);
+
+    // Line from dot to label
+    const line = document.createElementNS(ns, 'line');
+    line.setAttribute('x1', x); line.setAttribute('y1', y);
+    line.setAttribute('x2', lx); line.setAttribute('y2', ly);
+    line.setAttribute('stroke', 'rgba(212,165,63,0.5)');
+    line.setAttribute('stroke-width', '0.35');
+    g.appendChild(line);
+
+    // Pill background for label legibility
+    const FONT = 3.6;
+    const PW = label.length * 2.15 + 5;
+    const PH = 5.5;
+    const PX = la === 'start' ? lx + 0.5 : lx - PW - 0.5;
+    const PY = ly - PH / 2;
+    const pill = document.createElementNS(ns, 'rect');
+    pill.setAttribute('x', PX); pill.setAttribute('y', PY);
+    pill.setAttribute('width', PW); pill.setAttribute('height', PH);
+    pill.setAttribute('rx', '1.4');
+    pill.setAttribute('fill', 'rgba(8,8,8,0.72)');
+    g.appendChild(pill);
+
+    // Label text
+    const txt = document.createElementNS(ns, 'text');
+    txt.setAttribute('x', la === 'start' ? lx + 3 : lx - 3);
+    txt.setAttribute('y', ly + 1.6);
+    txt.setAttribute('text-anchor', la);
+    txt.setAttribute('font-size', FONT);
+    txt.setAttribute('fill', '#D4A53F');
+    txt.setAttribute('font-family', 'Space Grotesk, sans-serif');
+    txt.setAttribute('font-weight', '600');
+    txt.setAttribute('letter-spacing', '0.6');
+    txt.textContent = label.toUpperCase();
+    g.appendChild(txt);
+
+    svg.appendChild(g);
+  });
+}
+
+// ─── Feature cards ────────────────────────────────────────────────────────
+function buildCards(data) {
+  const grid = $('feat-grid');
+  grid.innerHTML = '';
+  ZONES.forEach(({ key, label }, i) => {
+    const card = document.createElement('div');
+    card.className = 'feat-card'; card.dataset.i = i;
+    card.innerHTML = `<p class="fc-label">${label}</p><p class="fc-text">${data[key] || ''}</p>`;
+    grid.appendChild(card);
+  });
+}
+
+// ─── Staggered animation ──────────────────────────────────────────────────
+function animateDots(done) {
+  const groups = $('a-svg').querySelectorAll('.a-group');
+  let last = 0;
+  groups.forEach((g, i) => {
+    const d = 200 + i * 320;
+    if (d > last) last = d;
+    setTimeout(() => g.classList.add('on'), d);
+  });
+  setTimeout(done, last + 360);
+}
+
+function animateCards(done) {
+  const cards = $('feat-grid').querySelectorAll('.feat-card');
+  let last = 0;
+  cards.forEach((c, i) => {
+    const d = i * 90;
+    if (d > last) last = d;
+    setTimeout(() => c.classList.add('on'), d);
+  });
+  setTimeout(done, last + 420);
+}
+
+function animateReveal() {
+  ['rev-kicker','rev-h','rev-sum','rev-rule','conv','btn-cta','share-row','cta-note']
+    .forEach((id, i) => setTimeout(() => $(id)?.classList.add('on'), i * 120));
+}
+
+// ─── CTA click tracking ───────────────────────────────────────────────────
+function ctaClick() {
+  // Fire tracking non-blocking, then open stori.co.in
+  fetch(`${API_BASE}/api/face/click`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: currentReadId }),
+  }).catch(() => {});
+  window.open('https://stori.co.in', '_blank', 'noopener,noreferrer');
+}
+
+// ─── Share ────────────────────────────────────────────────────────────────
+async function shareExp() {
+  const shareData = {
+    title: 'AI read my face — Stori AI',
+    text: 'Let AI read your facial features in 30 seconds →',
+    url: 'https://face.stori.co.in',
+  };
+  try {
+    if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+      await navigator.share(shareData);
+    } else {
+      await navigator.clipboard.writeText('https://face.stori.co.in');
+      showToast('Link copied to clipboard');
+    }
+  } catch {
+    // User cancelled share — no error
+  }
+}
+
+function showToast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────
+updateHistoryButton();
+
+// ─── Reset ────────────────────────────────────────────────────────────────
+function reset() {
+  stopCam(); stopLoad();
+  currentReadId = null;
+  const img = $('r-img');
+  img.src = ''; img.classList.remove('loaded');
+  $('a-svg').innerHTML = '';
+  $('feat-grid').innerHTML = '';
+  $('rev-h').textContent = ''; $('rev-sum').textContent = '';
+  $('img-zone').style.height = '';
+  $('a-svg').querySelectorAll('.a-group').forEach(g => g.classList.remove('on'));
+  ['rev-kicker','rev-h','rev-sum','rev-rule','conv','btn-cta','share-row','cta-note']
+    .forEach(id => $(id)?.classList.remove('on'));
+  show('land');
+}
+</script>
+</body>
+</html>
