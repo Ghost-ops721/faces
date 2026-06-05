@@ -625,6 +625,34 @@
 <input type="file" id="file-in" accept="image/*" onchange="onFile(event)"/>
 <div class="toast" id="toast"></div>
 
+<!-- Face detector (BlazeFace, ~230KB). Starts loading immediately so it's ready
+     by the time the user captures. Resolves to null if it can't load — the app
+     then falls back to the static pin template. -->
+<script type="module">
+  import { FilesetResolver, FaceDetector }
+    from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs";
+
+  window._faceDetectorReady = (async () => {
+    try {
+      const fileset = await FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm",
+      );
+      return await FaceDetector.createFromOptions(fileset, {
+        baseOptions: {
+          modelAssetPath:
+            "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite",
+          delegate: "CPU",
+        },
+        runningMode: "IMAGE",
+        minDetectionConfidence: 0.4,
+      });
+    } catch (e) {
+      console.warn("[face] detector failed to load — using template pins:", e);
+      return null;
+    }
+  })();
+</script>
+
 <script>
 // ─── Face annotation zones ────────────────────────────────────────────────
 // x/y: pin tip position as % of image (0–100 each axis).
@@ -643,7 +671,7 @@ const API_BASE = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
   ? 'https://www.storiapidomain.online'
   : '';
 
-let stream = null, loadTimer = null, currentReadId = null;
+let stream = null, loadTimer = null, currentReadId = null, faceCoords = null;
 
 // ─── History storage (localStorage) ──────────────────────────────────────
 const SCANS_KEY = 'face_scans';
@@ -914,6 +942,9 @@ async function analyze(canvas) {
 
   startLoad();
 
+  // Find the real face so pins lock onto features (null → template fallback).
+  faceCoords = await locateFace(canvas);
+
   for (let attempt = 0; attempt < COMPRESS_LEVELS.length; attempt++) {
     setLoadMsgs(RETRY_MSGS[attempt]);
 
@@ -937,6 +968,7 @@ async function analyze(canvas) {
       if (data.error) throw new Error(data.error);
 
       stopLoad();
+      if (faceCoords) data._coords = faceCoords; // persist detected pin positions
       if (data.id) saveScan(data.id, dataUrl, data);
       renderResult(dataUrl, data);
       return; // success — exit loop
@@ -974,33 +1006,88 @@ function renderResult(dataUrl, data) {
   $('rev-sum').textContent = data.summary;
   show('res');
 
-  img.onload = () => {
+  // Run exactly once, no matter how the image becomes ready.
+  let fired = false;
+  const onReady = () => {
+    if (fired) return; fired = true;
+
     const zone = $('img-zone');
     const w = zone.offsetWidth || window.innerWidth;
-    const ratio = img.naturalHeight / img.naturalWidth;
-    zone.style.height = Math.min(w * ratio, window.innerHeight * 0.66) + 'px';
+    const ratio = (img.naturalHeight / img.naturalWidth) || (4 / 3);
+    // Show the full frame (no object-fit crop) so pin %s map exactly; cap tall
+    // portraits at 82vh as a safety valve.
+    zone.style.height = Math.min(w * ratio, window.innerHeight * 0.82) + 'px';
 
-    buildPins();
+    buildPins(data._coords);
 
     // Fade in the image first
     requestAnimationFrame(() => requestAnimationFrame(() => img.classList.add('loaded')));
 
     animatePins(() => animateCards(() => animateReveal()));
   };
+
+  img.onload = onReady;
+  img.onerror = onReady; // still lay out the screen even if the image fails
   img.src = dataUrl;
+
+  // Covers two cases where onload never fires:
+  //  • the new src is identical to the current one (e.g. re-scanning the same photo)
+  //  • the data URL decodes synchronously from cache
+  if (img.complete && img.naturalWidth) onReady();
+}
+
+// ─── Locate the real face so pins land on actual features ────────────────
+// Returns { forehead:{x,y}, eyes:{x,y}, ... } in image-percentages, or null.
+async function locateFace(canvas) {
+  try {
+    const ready = window._faceDetectorReady;
+    if (!ready) return null;
+    // Don't let a still-loading model block forever on a slow connection.
+    const detector = await Promise.race([
+      ready,
+      new Promise(r => setTimeout(() => r('timeout'), 2500)),
+    ]);
+    if (!detector || detector === 'timeout') return null;
+
+    const det = detector.detect(canvas)?.detections?.[0];
+    if (!det || !det.keypoints || det.keypoints.length < 6) return null;
+
+    const W = canvas.width, H = canvas.height;
+    const bb = det.boundingBox;                 // pixels
+    const by = bb.originY / H, bh = bb.height / H;
+    const k = det.keypoints;                     // normalized 0..1
+    // BlazeFace order: 0 rightEye, 1 leftEye, 2 noseTip, 3 mouth, 4 rightEar, 5 leftEar
+    const [rEye, lEye, nose, mouth, rEar, lEar] = k;
+    const eyeX = (rEye.x + lEye.x) / 2, eyeY = (rEye.y + lEye.y) / 2;
+    const pct = (x, y) => ({ x: Math.max(2, Math.min(98, x * 100)),
+                             y: Math.max(2, Math.min(98, y * 100)) });
+
+    return {
+      forehead: pct(eyeX, by + bh * 0.16),
+      eyes:     pct(eyeX, eyeY),
+      nose:     pct(nose.x, nose.y),
+      cheeks:   pct((nose.x + lEar.x) / 2, (nose.y + mouth.y) / 2),
+      lips:     pct(mouth.x, mouth.y),
+      jawline:  pct(eyeX, by + bh * 0.99),
+    };
+  } catch (e) {
+    return null;
+  }
 }
 
 // ─── Annotation pins (HTML overlay, numbered, tappable) ──────────────────
-function buildPins() {
+// coords (optional): detected per-feature positions; falls back to template.
+function buildPins(coords) {
   const layer = $('a-pins');
   layer.innerHTML = '';
 
-  ZONES.forEach(({ x, y, label }, i) => {
+  ZONES.forEach(({ key, x, y, label }, i) => {
+    const p = (coords && coords[key]) || { x, y };
     const pin = document.createElement('button');
     pin.className = 'pin';
     pin.dataset.i = i;
-    pin.style.left = x + '%';
-    pin.style.top  = y + '%';
+    pin.style.left = p.x + '%';
+    pin.style.top  = p.y + '%';
     pin.setAttribute('aria-label', label);
     pin.innerHTML = `<span class="pin-body">${i + 1}</span>`;
     pin.onclick = () => focusFeature(i, true);
